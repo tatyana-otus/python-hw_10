@@ -18,7 +18,6 @@ class TestPB(unittest.TestCase):
                   ]
 
     def tearDown(self):
-        pass
         os.remove(TEST_FILE)
 
     def test_write(self):
@@ -39,9 +38,10 @@ class TestPB(unittest.TestCase):
             offset = offset + r_len + 2
         self.assertEqual(offset, bytes_written)
 
-    # @unittest.skip("Optional problem")
     def test_read(self):
         pb.deviceapps_xwrite_pb(self.deviceapps, TEST_FILE)
-        print(pb.deviceapps_xread_pb(TEST_FILE))
+        count = 0
         for i, d in enumerate(pb.deviceapps_xread_pb(TEST_FILE)):
             self.assertEqual(d, self.deviceapps[i])
+            count += 1
+        self.assertEqual(count, len(self.deviceapps))
