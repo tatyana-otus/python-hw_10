@@ -2,6 +2,7 @@ import os
 import unittest
 import gzip
 import struct
+import sys
 
 import pb
 MAGIC = 0xFFFFFFFF

@@ -19,6 +19,10 @@ static PyObject* c_message_to_py(DeviceApps* c_msg)
     PyObject* py_device_apps = PyDict_New();
     PyObject* py_device = PyDict_New();
     PyObject* py_apps_list = PyList_New(c_msg->n_apps);
+    if(py_device_apps == NULL || py_device == NULL || py_apps_list == NULL ){
+        PyErr_Format(PyExc_MemoryError, "Can't alloc memory");
+        return NULL;
+    }
 
     if (c_device->has_type){
         PyObject* py_type = Py_BuildValue("s#", c_device->type.data,
@@ -36,10 +40,14 @@ static PyObject* c_message_to_py(DeviceApps* c_msg)
     Py_DECREF(py_device);
 
     if (c_msg->has_lat){
-        PyDict_SetItemString(py_device_apps, "lat", Py_BuildValue("d", c_msg->lat));
+        PyObject* py_lat = Py_BuildValue("d", c_msg->lat);
+        PyDict_SetItemString(py_device_apps, "lat", py_lat);
+        Py_DECREF(py_lat);
     }
     if (c_msg->has_lon){
-        PyDict_SetItemString(py_device_apps, "lon", Py_BuildValue("d", c_msg->lon));
+        PyObject* py_lon = Py_BuildValue("d", c_msg->lon);
+        PyDict_SetItemString(py_device_apps, "lon", py_lon);
+        Py_DECREF(py_lon);
     }
     for(int i = 0; i < c_msg->n_apps; ++i){
         PyList_SetItem(py_apps_list, i, Py_BuildValue("i", c_msg->apps[i]));
@@ -79,6 +87,7 @@ DeviceAppsGen_next(DeviceAppsGenState *gstate)
         }
         int read_bytes = gzread(gstate->file, gstate->message_buf, msg_len);
         if(read_bytes != msg_len){
+            PyErr_Format(PyExc_RuntimeError, "Wrong file format");
             return NULL;
         }
         if(header.type == DEVICE_APPS_TYPE){
@@ -110,6 +119,10 @@ DeviceAppsGen_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     gstate->message_buf = malloc(MAX_MESSAGE_SIZE);
     gstate->apps_buf = malloc(MAX_APP_SIZE * sizeof(uint32_t));
+    if (!gstate->message_buf || !gstate->apps_buf) {
+        PyErr_Format(PyExc_MemoryError, "Can't alloc memory");
+        return NULL;
+    }
 
     gzFile f_h = gzopen(path, "rb");
     if(!f_h){

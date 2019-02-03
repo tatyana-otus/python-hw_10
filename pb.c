@@ -10,7 +10,8 @@
 #include "const.h"
 
 
-static void addDoubleField(PyObject* d, protobuf_c_boolean* has, double* field, const char* field_name)
+static void addDoubleField(PyObject* d, protobuf_c_boolean* has,
+                           double* field, const char* field_name)
 {
     PyObject* py_field = PyDict_GetItemString(d, field_name);
     if(py_field != NULL){
@@ -42,8 +43,10 @@ static int addApps(PyObject* dic, DeviceApps* p_msg)
     PyObject* py_apps = PyDict_GetItemString(dic, "apps");
     if(PyList_Check(py_apps)){
         size_t c_apps_len = PyList_Size(py_apps);
-        if(c_apps_len > MAX_APP_SIZE)
+        if(c_apps_len > MAX_APP_SIZE){
+            PyErr_Format(PyExc_BufferError, "The number of applications exceeds %d", MAX_APP_SIZE);
             return -1;
+        }
         p_msg->n_apps = c_apps_len;
         for(size_t j = 0; j < c_apps_len; ++j){
             PyObject* py_int = PyList_GetItem(py_apps, j);
@@ -66,6 +69,20 @@ static void free_resources(uint8_t* msg, uint32_t* app, gzFile f_h)
 }
 
 
+static int py_message_to_c(PyObject* py_msg, DeviceApps* c_msg, DeviceApps__Device* c_device)
+{
+    PyObject* py_device = PyDict_GetItemString(py_msg, "device");
+    if(py_device != NULL){
+        addStringField(py_device, &c_device->has_type, &c_device->type, "type");
+        addStringField(py_device, &c_device->has_id,   &c_device->id,   "id");
+    }
+    addDoubleField(py_msg, &c_msg->has_lat, &c_msg->lat, "lat");
+    addDoubleField(py_msg, &c_msg->has_lon, &c_msg->lon, "lon");
+
+    return addApps(py_msg, c_msg);
+}
+
+
 static PyObject* py_deviceapps_xwrite_pb(PyObject* self, PyObject* args)
 {
     const char* path;
@@ -81,10 +98,9 @@ static PyObject* py_deviceapps_xwrite_pb(PyObject* self, PyObject* args)
     DeviceApps msg = DEVICE_APPS__INIT;
     DeviceApps__Device device = DEVICE_APPS__DEVICE__INIT;
 
-    size_t wr_bytes = 0;
     gzFile f_h = gzopen(path, "ab9");
     if(!f_h){
-        PyErr_Format(PyExc_OSError, "Can't create file");
+        PyErr_Format(PyExc_OSError, "Can't create/open file");
         return NULL;
     }
     uint8_t* buf = malloc(MAX_MESSAGE_SIZE + sizeof(pbheader_t));
@@ -99,22 +115,17 @@ static PyObject* py_deviceapps_xwrite_pb(PyObject* self, PyObject* args)
     uint8_t* buf_message = buf + sizeof(pbheader_t);
     buf_header->magic = MAGIC;
     buf_header->type = DEVICE_APPS_TYPE;
+    size_t wr_bytes = 0;
     for(size_t i = 0; i < size; ++i){
         PyObject* d = PyList_GetItem(obj, i);
         if(!PyDict_Check(d))
             continue;
-        PyObject* py_device = PyDict_GetItemString(d, "device");
-        if(py_device != NULL){
-            addStringField(py_device, &device.has_type, &device.type, "type");
-            addStringField(py_device, &device.has_id, &device.id, "id");
-        }
-        addDoubleField(d, &msg.has_lat, &msg.lat, "lat");
-        addDoubleField(d, &msg.has_lon, &msg.lon, "lon");
-        if(addApps(d, &msg) == -1){
+
+        if (py_message_to_c(d, &msg, &device) == -1){
             free_resources(buf, apps_buf, f_h);
-            PyErr_Format(PyExc_BufferError, "The number of applications exceeds %d", MAX_APP_SIZE);
             return NULL;
         }
+
         size_t len = device_apps__get_packed_size(&msg);
         if(len > MAX_MESSAGE_SIZE) {
             free_resources(buf, apps_buf, f_h);
@@ -126,10 +137,9 @@ static PyObject* py_deviceapps_xwrite_pb(PyObject* self, PyObject* args)
         gzwrite(f_h, buf, sizeof(pbheader_t) + len);
         wr_bytes += sizeof(pbheader_t) + len;
     }
+
     free_resources(buf, apps_buf, f_h);
-
     printf("Write to: %s\n", path);
-
     return Py_BuildValue("i", wr_bytes);
 }
 
