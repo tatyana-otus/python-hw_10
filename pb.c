@@ -10,10 +10,10 @@
 #include "const.h"
 
 
-static void addDoubleField(PyObject* d, protobuf_c_boolean* has,
+static void addDoubleField(PyObject* dic, protobuf_c_boolean* has,
                            double* field, const char* field_name)
 {
-    PyObject* py_field = PyDict_GetItemString(d, field_name);
+    PyObject* py_field = PyDict_GetItemString(dic, field_name);
     if(py_field != NULL){
         double value = PyFloat_AsDouble(py_field);
         *has = 1;
@@ -41,6 +41,10 @@ static void addStringField(PyObject* dic, protobuf_c_boolean* has,
 static int addApps(PyObject* dic, DeviceApps* p_msg)
 {
     PyObject* py_apps = PyDict_GetItemString(dic, "apps");
+    if(py_apps == NULL){
+        PyErr_Format(PyExc_BufferError, "Wrong \"apps\" format");
+        return -1;
+    }
     if(PyList_Check(py_apps)){
         size_t c_apps_len = PyList_Size(py_apps);
         if(c_apps_len > MAX_APP_SIZE){
@@ -53,9 +57,9 @@ static int addApps(PyObject* dic, DeviceApps* p_msg)
             p_msg->apps[j] = PyLong_AsUnsignedLong(py_int);
         }
     }
-    else {
-        p_msg->n_apps = 0;
-        p_msg->apps = NULL;
+    else{
+        PyErr_Format(PyExc_BufferError, "Wrong \"apps\" format");
+        return -1;
     }
     return 0;
 }
@@ -75,6 +79,10 @@ static int py_message_to_c(PyObject* py_msg, DeviceApps* c_msg, DeviceApps__Devi
     if(py_device != NULL){
         addStringField(py_device, &c_device->has_type, &c_device->type, "type");
         addStringField(py_device, &c_device->has_id,   &c_device->id,   "id");
+    }
+    else{
+        PyErr_Format(PyExc_BufferError, "Wrong \"device\" format");
+        return -1;
     }
     addDoubleField(py_msg, &c_msg->has_lat, &c_msg->lat, "lat");
     addDoubleField(py_msg, &c_msg->has_lon, &c_msg->lon, "lon");

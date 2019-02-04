@@ -8,7 +8,7 @@ typedef struct {
     PyObject_HEAD
     gzFile file;
     uint8_t* message_buf;
-    uint32_t*apps_buf;
+    uint32_t* apps_buf;
 } DeviceAppsGenState;
 
 
